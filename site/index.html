@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FileFit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Free app that converts JPG, PNG, PDF and DOCX files and shrinks them under any upload size limit. For Windows, Linux and Android.">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a hero split between the promise and a download card that already knows your OS, then a before/after "upload box" strip, features, and the real app window. */
+:root {
+  --bg: #F6F6FB;
+  --surface: #FFFFFF;
+  --ink: #1B1D2E;
+  --muted: #5E6279;
+  --line: #E1E2EE;
+  --accent: #4F46E5;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #ECEBFD;
+  --fit: #0E9F6E;
+  --fit-soft: #E2F6EE;
+  --over: #C2410C;
+  --code-bg: #15172A;
+  --code-fg: #E7E8F7;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101120; --surface: #181A2C; --ink: #ECEDF8; --muted: #A2A5BF; --line: #2A2D45;
+    --accent: #8B85FF; --accent-ink: #12132A; --accent-soft: #24244A; --fit: #34D399; --fit-soft: #133328;
+    --over: #FB923C; --code-bg: #0B0C18; --code-fg: #E7E8F7; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101120; --surface: #181A2C; --ink: #ECEDF8; --muted: #A2A5BF; --line: #2A2D45;
+  --accent: #8B85FF; --accent-ink: #12132A; --accent-soft: #24244A; --fit: #34D399; --fit-soft: #133328;
+  --over: #FB923C; --code-bg: #0B0C18; --code-fg: #E7E8F7; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 400 16px/1.6 var(--body);
+}
+.wrap {
+  max-width: 1100px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 20px; }
+.brand { display: flex; align-items: center; gap: 10px; font: 800 1.35rem/1 var(--display); color: var(--ink); text-decoration: none; }
+.brand img { width: 34px; height: 34px; }
+nav { display: flex; gap: 20px; flex-wrap: wrap; }
+nav a { color: var(--muted); text-decoration: none; font-weight: 500; }
+nav a:hover { color: var(--ink); }
+
+.hero .wrap { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: center; padding-block: 40px 56px; }
+.hero h1 {
+  font: 800 clamp(2.4rem, 5.6vw, 4.1rem)/1.02 var(--display); letter-spacing: -0.02em;
+  margin: 0 0 18px; text-wrap: balance;
+}
+.hero h1 em { font-style: normal; color: var(--accent); }
+.lede { font-size: 1.15rem; color: var(--muted); max-width: 34em; margin: 0 0 24px; }
+.formats { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.formats li {
+  font: 500 0.78rem/1 var(--mono); letter-spacing: 0.04em; padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted);
+}
+
+.dl {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px;
+  box-shadow: 0 18px 40px -24px rgba(40, 36, 120, 0.35); min-width: 0;
+}
+.dl h2 { font: 600 1.05rem/1.2 var(--display); margin: 0 0 14px; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--bg); border-radius: 12px; padding: 4px; margin-bottom: 20px; }
+.tabs button {
+  font: 600 0.95rem/1 var(--body); color: var(--muted); background: transparent; border: 0;
+  padding: 11px 6px; border-radius: 9px; cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.panel { display: grid; gap: 12px; }
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none;
+  font: 600 1.02rem/1 var(--body); padding: 16px 18px; border-radius: 12px; border: 1px solid transparent;
+}
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { border-color: var(--line); color: var(--ink); background: transparent; }
+.btn.ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn.disabled { background: var(--bg); color: var(--muted); border-color: var(--line); cursor: default; }
+.note { font-size: 0.86rem; color: var(--muted); margin: 0; }
+.step-label { font-size: 0.86rem; color: var(--muted); margin: 4px 0 -4px; }
+.cmd {
+  display: flex; align-items: center; gap: 8px; background: var(--code-bg); color: var(--code-fg);
+  border-radius: 10px; padding: 6px 6px 6px 14px; min-width: 0;
+}
+.cmd code { font: 500 0.88rem/1.5 var(--mono); flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+.cmd button {
+  font: 600 0.78rem/1 var(--body); color: var(--code-fg); background: rgba(255,255,255,.1);
+  border: 0; border-radius: 7px; padding: 8px 10px; cursor: pointer; flex: none;
+}
+.cmd button:hover { background: rgba(255,255,255,.2); }
+
+/* the upload-box strip */
+.fit { border-block: 1px solid var(--line); background: var(--surface); }
+.fit .wrap { display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: center; padding-block: 28px; }
+.fit h2 { font: 800 1.5rem/1.15 var(--display); margin: 0; max-width: 12em; text-wrap: balance; }
+.portal { display: grid; gap: 10px; min-width: 0; }
+.portal-row { display: grid; grid-template-columns: minmax(0, 11em) 1fr auto; gap: 14px; align-items: center; font-variant-numeric: tabular-nums; }
+.fname { font: 500 0.88rem/1.3 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meter { position: relative; height: 12px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
+.meter span { position: absolute; inset: 0 auto 0 0; border-radius: 6px; }
+.meter i { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--ink); left: var(--limit); }
+.size { font: 600 0.9rem/1 var(--body); min-width: 5.5em; text-align: right; }
+.before .meter span { width: 100%; background: var(--over); opacity: .8; }
+.before .size { color: var(--over); }
+.after .meter span { background: var(--fit); }
+.after .size { color: var(--fit); }
+.legend { font-size: 0.82rem; color: var(--muted); margin: 0; }
+
+.features .wrap { padding-block: 64px 24px; }
+.features h2, .shot h2 { font: 800 2rem/1.1 var(--display); margin: 0 0 28px; letter-spacing: -0.01em; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px 36px; }
+.grid h3 { font: 600 1.08rem/1.3 var(--display); margin: 0 0 6px; }
+.grid p { margin: 0; color: var(--muted); max-width: 32em; }
+
+.shot .wrap { padding-block: 48px 64px; }
+.shot figure { margin: 0; }
+.shot img { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 30px 60px -36px rgba(30, 28, 90, .45); }
+.shot figcaption { color: var(--muted); font-size: .9rem; margin-top: 12px; }
+
+footer { border-top: 1px solid var(--line); }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-block: 28px; color: var(--muted); font-size: .9rem; }
+
+@media (max-width: 860px) {
+  .hero .wrap { grid-template-columns: 1fr; gap: 32px; padding-block: 16px 40px; }
+  .fit .wrap { grid-template-columns: 1fr; }
+  .grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .grid { grid-template-columns: 1fr; }
+  nav { display: none; }
+  .portal-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .portal-row .meter { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .after .meter span { animation: shrink 1.4s cubic-bezier(.2,.8,.2,1) .3s both; }
+  @keyframes shrink { from { width: 100%; background: var(--over); } to { width: var(--w); } }
+}
+.after .meter span { width: var(--w); }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.png" alt="">FileFit</a>
+    <nav>
+      <a href="#download">Download</a>
+      <a href="#features">Features</a>
+      <a id="gh-link" href="#">Source code</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero" id="download">
+    <div class="wrap">
+      <div>
+        <h1>Make any file <em>fit</em> the upload box.</h1>
+        <p class="lede">Portal wants a JPG under 200 KB and you have a 7 MB PDF? FileFit converts it and shrinks it to the limit in one click. Free, offline, and your files never leave your computer.</p>
+        <ul class="formats" aria-label="Supported formats">
+          <li>JPG</li><li>JPEG</li><li>PNG</li><li>WEBP</li><li>HEIC</li><li>PDF</li><li>DOCX</li>
+        </ul>
+      </div>
+
+      <div class="dl">
+        <h2>Download FileFit <span id="ver"></span></h2>
+        <div class="tabs" role="tablist" aria-label="Choose your system">
+          <button role="tab" id="tab-windows" aria-controls="p-windows" aria-selected="true">Windows</button>
+          <button role="tab" id="tab-linux" aria-controls="p-linux" aria-selected="false">Linux</button>
+          <button role="tab" id="tab-android" aria-controls="p-android" aria-selected="false">Android</button>
+        </div>
+
+        <div class="panel" id="p-windows" role="tabpanel" aria-labelledby="tab-windows">
+          <a class="btn primary" data-asset="FileFit-Setup.exe" href="#">Download installer (.exe)</a>
+          <a class="btn ghost" data-asset="FileFit-Portable.exe" href="#">Portable version, no install</a>
+          <p class="note">Windows 10 and 11, 64-bit. If Windows shows "Windows protected your PC", click More info, then Run anyway.</p>
+        </div>
+
+        <div class="panel" id="p-linux" role="tabpanel" aria-labelledby="tab-linux" hidden>
+          <p class="step-label">Install with pipx (recommended)</p>
+          <div class="cmd"><code>pipx install filefit</code><button type="button">Copy</button></div>
+          <p class="step-label">Add it to your app menu</p>
+          <div class="cmd"><code>filefit-cli --install-shortcut</code><button type="button">Copy</button></div>
+          <a class="btn ghost" data-asset="FileFit-linux-x86_64.tar.gz" href="#">Or download the standalone app (.tar.gz)</a>
+          <p class="note">Also works with <code>pip install filefit</code> inside a virtual environment. Needs Python 3.10 or newer.</p>
+        </div>
+
+        <div class="panel" id="p-android" role="tabpanel" aria-labelledby="tab-android" hidden>
+          <a class="btn disabled" id="play-link" href="#" aria-disabled="true">Coming soon to Google Play</a>
+          <p class="note">The Android version is in testing. Use the Windows or Linux version in the meantime.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="fit" aria-label="Example">
+    <div class="wrap">
+      <h2>Rejected for size? Not any more.</h2>
+      <div class="portal">
+        <div class="portal-row before">
+          <span class="fname">marksheet_scan.pdf</span>
+          <span class="meter" style="--limit: 2.6%"><span></span><i title="200 KB limit"></i></span>
+          <span class="size">7.6 MB</span>
+        </div>
+        <div class="portal-row after">
+          <span class="fname">marksheet_scan.jpg</span>
+          <span class="meter" style="--limit: 2.6%; --w: 2.3%"><span></span><i title="200 KB limit"></i></span>
+          <span class="size">177 KB ✓</span>
+        </div>
+        <p class="legend">The black line is the portal's 200 KB limit. Bars drawn to scale.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="wrap">
+      <h2>Everything an upload form asks for</h2>
+      <div class="grid">
+        <div><h3>Any format to any format</h3><p>JPG, JPEG, PNG, WEBP, HEIC photos, PDF and Word files, converted in both directions.</p></div>
+        <div><h3>Hit an exact size limit</h3><p>Type 2 MB or 100 KB. FileFit keeps the best quality that fits and only shrinks the picture if it must.</p></div>
+        <div><h3>Resize to set dimensions</h3><p>Set a maximum width and height in pixels, for photo and signature uploads.</p></div>
+        <div><h3>Merge into one PDF</h3><p>Combine scans, photos and documents into a single PDF in the order you choose.</p></div>
+        <div><h3>Works offline</h3><p>Everything happens on your own device. Nothing is uploaded anywhere.</p></div>
+        <div><h3>Originals stay safe</h3><p>New files get a new name. Your original documents are never changed.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="shot">
+    <div class="wrap">
+      <h2>See it in action</h2>
+      <figure>
+        <img src="screenshot.png" alt="FileFit window with three files converted to JPG under 200 KB" width="1120" height="760">
+        <figcaption>Three 7.6 MB files converted to JPG under a 200 KB limit.</figcaption>
+      </figure>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>FileFit is free and open source (MIT licence). Made by Dipanjan Banerjee. Questions: <a href="mailto:dipanjanbanerjee20@gmail.com">dipanjanbanerjee20@gmail.com</a></span>
+    <span><a href="privacy.html">Privacy policy</a> · <a id="gh-releases" href="#">All releases</a></span>
+  </div>
+</footer>
+
+<script>
+  // ---- Edit these two lines after creating the GitHub repository / Play listing ----
+  const REPO = "dipanjanbanerjee/filefit";
+  const PLAY_URL = "";  // e.g. https://play.google.com/store/apps/details?id=com.filefit.app
+
+  const base = `https://github.com/${REPO}`;
+  document.querySelectorAll("[data-asset]").forEach(a => {
+    a.href = `${base}/releases/latest/download/${a.dataset.asset}`;
+  });
+  document.getElementById("gh-link").href = base;
+  document.getElementById("gh-releases").href = `${base}/releases`;
+  if (PLAY_URL) {
+    const p = document.getElementById("play-link");
+    p.href = PLAY_URL; p.className = "btn primary"; p.textContent = "Get it on Google Play";
+    p.removeAttribute("aria-disabled");
+  }
+
+  // ---- OS tabs, preselecting the visitor's system ----
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  function show(id) {
+    tabs.forEach(t => {
+      const on = t.id === "tab-" + id;
+      t.setAttribute("aria-selected", on);
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    });
+  }
+  tabs.forEach(t => t.addEventListener("click", () => show(t.id.slice(4))));
+  const ua = navigator.userAgent;
+  show(/Android/i.test(ua) ? "android" : /Linux|X11/i.test(ua) && !/CrOS/.test(ua) ? "linux" : "windows");
+
+  // ---- copy buttons ----
+  document.querySelectorAll(".cmd button").forEach(b => b.addEventListener("click", () => {
+    const code = b.previousElementSibling;
+    const done = () => { b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy", 1500); };
+    try {
+      navigator.clipboard.writeText(code.textContent).then(done, () => selectText(code));
+    } catch (e) { selectText(code); }
+  }));
+  function selectText(el) {
+    const r = document.createRange(); r.selectNodeContents(el);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+</script>
+</body>
+</html>

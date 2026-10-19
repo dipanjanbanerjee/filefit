@@ -1,0 +1,103 @@
+# Builds every download automatically.
+#   - Push a tag like v1.0.1  -> builds everything and publishes a GitHub Release (+ PyPI).
+#   - "Run workflow" button    -> builds everything as downloadable test files, publishes nothing.
+name: Build and release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: sudo apt-get update && sudo apt-get install -y libreoffice-writer-nogui libegl1
+      - run: pip install -e ".[dev]"
+      - run: pytest -q tests
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install ".[dev]"
+      - name: Build app folder (for the installer)
+        run: pyinstaller --noconfirm --clean FileFit.spec
+      - name: Build portable single exe
+        shell: bash
+        run: FILEFIT_ONEFILE=1 pyinstaller --noconfirm FileFit.spec --distpath dist/portable
+      - name: Build installer
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $version = (python -c "import filefit; print(filefit.__version__)")
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" installer\FileFit.iss
+          Move-Item dist\portable\FileFit.exe dist\FileFit-Portable.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/FileFit-Setup.exe
+            dist/FileFit-Portable.exe
+
+  linux:
+    needs: test
+    runs-on: ubuntu-22.04   # older base = binary runs on more distros
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install ".[dev]"
+      - name: Python package for pip / pipx
+        run: python -m build
+      - name: Standalone Linux app
+        run: |
+          pyinstaller --noconfirm --clean FileFit.spec
+          tar -C dist -czf dist/FileFit-linux-x86_64.tar.gz FileFit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            out/FileFit-Setup.exe
+            out/FileFit-Portable.exe
+            out/FileFit-linux-x86_64.tar.gz
+            out/*.whl
+            out/filefit-*.tar.gz
+
+  pypi:
+    # Needs a one-time "trusted publisher" setup on pypi.org (see PUBLISHING.md).
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: linux, path: out }
+      - run: mkdir dist && mv out/*.whl out/filefit-*.tar.gz dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

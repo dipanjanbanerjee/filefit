@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "filefit"
+dynamic = ["version"]
+description = "Convert JPG, PNG, PDF and DOCX files and shrink them under a size limit for upload portals."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Dipanjan Banerjee", email = "dipanjanbanerjee20@gmail.com" }]
+maintainers = [{ name = "Dipanjan Banerjee", email = "dipanjanbanerjee20@gmail.com" }]
+keywords = ["converter", "pdf", "jpg", "docx", "compress", "resize"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: X11 Applications :: Qt",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+]
+dependencies = [
+    "PySide6>=6.7",
+    "Pillow>=10.3",
+    "pillow-heif>=0.16",
+    "PyMuPDF>=1.24.3",
+    "python-docx>=1.1",
+    "pdf2docx>=0.5.8",
+    "pywin32>=306; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "numpy", "pyinstaller>=6.6", "build"]
+
+[project.gui-scripts]
+filefit = "filefit.gui.main_window:main"
+
+[project.scripts]
+filefit-cli = "filefit.cli:main"
+
+[project.urls]
+Homepage = "https://dipanjanbanerjee.github.io/filefit/"
+Source = "https://github.com/dipanjanbanerjee/filefit"
+Issues = "https://github.com/dipanjanbanerjee/filefit/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "filefit.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["filefit*"]
+
+[tool.setuptools.package-data]
+filefit = ["assets/*"]

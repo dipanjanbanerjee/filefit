@@ -1,0 +1,13 @@
+VSVersionInfo(
+  ffi=FixedFileInfo(filevers=(1, 0, 0, 0), prodvers=(1, 0, 0, 0)),
+  kids=[
+    StringFileInfo([StringTable("040904B0", [
+      StringStruct("FileDescription", "FileFit - File Converter & Compressor"),
+      StringStruct("ProductName", "FileFit"),
+      StringStruct("FileVersion", "1.0.0"),
+      StringStruct("ProductVersion", "1.0.0"),
+      StringStruct("OriginalFilename", "FileFit.exe"),
+    ])]),
+    VarFileInfo([VarStruct("Translation", [1033, 1200])]),
+  ],
+)
