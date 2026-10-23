@@ -28,6 +28,7 @@ UninstallDisplayIcon={app}\{#AppExe}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+CloseApplications=force
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 LicenseFile=..\LICENSE
@@ -61,3 +62,11 @@ Root: HKA; Subkey: "Software\Classes\.docx\OpenWithList\{#AppExe}"; Flags: unins
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; FileFit's own "Update now" runs this installer silently with /UPDATE=1; start FileFit again afterwards.
+Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser; Check: IsSelfUpdate
+
+[Code]
+function IsSelfUpdate: Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:UPDATE|0}') = '1');
+end;

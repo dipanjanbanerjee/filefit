@@ -34,6 +34,17 @@ def run() -> int:
                 if res.error or not res.outputs:
                     raise RuntimeError(f"{path.name} -> {fmt}: {res.error}")
                 print(f"ok {path.name} -> {fmt} ({res.outputs[0].size} bytes)")
+        # The update check must work inside the packaged app (needs HTTPS certificates).
+        import os
+        from . import updater
+        print(f"install kind: {updater.install_kind()}")
+        try:
+            rel = updater.fetch_latest(timeout=15)
+            print(f"ok update check (latest release {rel.version})")
+        except Exception as exc:
+            if os.environ.get("FILEFIT_SELFTEST_NET"):
+                raise RuntimeError(f"update check failed: {exc}") from exc
+            print(f"note: update check skipped, offline? ({exc})")
         print("selftest passed")
         return 0
     except Exception as exc:  # report and fail the build

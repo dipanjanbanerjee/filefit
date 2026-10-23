@@ -21,6 +21,7 @@ if not (_here / "filefit").exists():
     sys.path.insert(0, str(_here.parent))
 
 from filefit import __author__, __email__, __version__  # noqa: E402
+from filefit import updater  # noqa: E402
 from filefit.core import INPUT_EXTS, Options, combine_to_pdf, convert_file, human_size, kind_of  # noqa: E402
 
 # ---------------------------------------------------------------- look & feel
@@ -109,7 +110,11 @@ class FileFitApp:
             seen = bool(await self.prefs.get("welcome_seen"))
         except Exception:
             pass
-        self.show_home() if seen else self.show_welcome()
+        if seen:
+            self.show_home()
+            self.page.run_task(self.check_updates)
+        else:
+            self.show_welcome()
 
     async def buzz(self):
         try:
@@ -205,6 +210,7 @@ class FileFitApp:
         except Exception:
             pass
         self.show_home()
+        self.page.run_task(self.check_updates)
 
     # ---------------------------------------------------------- home
     def show_home(self):
@@ -224,6 +230,7 @@ class FileFitApp:
             animate_opacity=200,
         )
         self.results_col = ft.Column(spacing=12, key=ft.ScrollKey("results"))
+        self.update_banner = ft.Container(visible=False)
 
         header = ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=[
             ft.Row(spacing=12, controls=[
@@ -254,6 +261,7 @@ class FileFitApp:
 
         self.body = body = ft.ListView(expand=True, padding=ft.Padding.only(left=20, right=20, top=8, bottom=28), spacing=22, controls=[
             header,
+            self.update_banner,
             picker_card,
             self.file_col,
             ft.Column(spacing=12, controls=[section("Convert to"), self.format_row]),
@@ -555,6 +563,48 @@ class FileFitApp:
         self.page.show_dialog(ft.SnackBar(content=txt(message, color=INK, weight=ft.FontWeight.W_600),
                                           bgcolor=color, behavior=ft.SnackBarBehavior.FLOATING))
 
+    async def check_updates(self, manual=False):
+        try:
+            rel = await asyncio.to_thread(updater.check)
+        except Exception:
+            if manual:
+                self.toast("Could not check for updates. Are you online?", WARN)
+            return
+        if not rel:
+            if manual:
+                self.toast(f"You have the latest version ({__version__})", OK)
+            return
+        url = rel.asset("FileFit-Android.apk") or rel.page
+
+        async def get(e):
+            await self.urls.launch_url(url)
+
+        def later(e):
+            self.update_banner.visible = False
+            self.page.update()
+
+        self.update_banner.content = ft.Container(
+            border_radius=20, padding=2, gradient=GRAD,
+            content=ft.Container(
+                border_radius=18, bgcolor=SURFACE, padding=ft.Padding.symmetric(vertical=14, horizontal=16),
+                content=ft.Column(spacing=10, controls=[
+                    ft.Row(spacing=12, controls=[
+                        ft.Icon(ft.Icons.SYSTEM_UPDATE_ROUNDED, color=TEAL),
+                        ft.Column(spacing=1, expand=True, controls=[
+                            txt(f"FileFit {rel.version} is here", size=15, weight=ft.FontWeight.W_700, font=DISPLAY),
+                            txt("Download it, then tap the file to install.", size=12, color=MUTED),
+                        ]),
+                    ]),
+                    ft.Row(spacing=10, controls=[
+                        self.action_btn("Download update", ft.Icons.DOWNLOAD_ROUNDED, get, True),
+                        ft.TextButton(content=txt("Later", color=MUTED), on_click=later),
+                    ]),
+                ]),
+            ),
+        )
+        self.update_banner.visible = True
+        self.page.update()
+
     def show_support(self, e=None):
         async def pay(e):
             try:
@@ -615,13 +665,17 @@ class FileFitApp:
                     "leave your phone.", color=MUTED, size=14),
                 txt(f"Made by {__author__}", size=14, weight=ft.FontWeight.W_600),
                 txt(__email__, size=14, color=TEAL, selectable=True),
+                ft.Row(spacing=0, wrap=True, controls=[
+                    ft.TextButton(content=txt("Website", color=TEAL), on_click=open_site),
+                    ft.TextButton(content=txt("Email", color=TEAL), on_click=email),
+                    ft.TextButton(content=txt("Welcome tour", color=MUTED), on_click=replay),
+                ]),
             ]),
             actions=[
                 ft.TextButton(content=txt("Support", color=PINK), on_click=lambda e: (self.page.pop_dialog(),
                                                                                     self.show_support())),
-                ft.TextButton(content=txt("Welcome tour", color=MUTED), on_click=replay),
-                ft.TextButton(content=txt("Email", color=TEAL), on_click=email),
-                ft.TextButton(content=txt("Website", color=TEAL), on_click=open_site),
+                ft.TextButton(content=txt("Check for updates", color=TEAL),
+                              on_click=lambda e: (self.page.pop_dialog(), self.page.run_task(self.check_updates, True))),
             ],
         ))
 

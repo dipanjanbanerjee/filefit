@@ -62,6 +62,18 @@ QPushButton#support {{ background: transparent; border: 1px solid {PINK}; color:
     border-radius: 18px; padding: 7px 16px; }}
 QPushButton#support:hover {{ background: rgba(255, 92, 168, 40); }}
 
+QPushButton#ghost {{ background: transparent; border: 1px solid {LINE}; color: {MUTED};
+    border-radius: 18px; padding: 7px 14px; }}
+QPushButton#ghost:hover {{ border-color: {TEAL}; color: {TEXT}; }}
+
+QFrame#banner {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(124, 92, 255, 70),
+    stop:1 rgba(25, 211, 180, 50)); border: 1px solid {VIOLET}; border-radius: 18px; }}
+QLabel#bannerText {{ font-size: 10.5pt; }}
+QPushButton#bannerBtn {{ background: {GRAD}; color: white; border: none; border-radius: 15px; padding: 8px 18px; }}
+QPushButton#bannerBtn:hover {{ background: {GRAD_HOVER}; }}
+
+QProgressDialog QProgressBar {{ min-height: 10px; max-height: 10px; }}
+
 QPushButton#primary {{
     background: {GRAD}; color: white; border: none; border-radius: 20px;
     min-height: 30px; padding: 12px; font-size: 12.5pt; font-weight: 800;

@@ -1,19 +1,21 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QFileInfo, QPointF, QSize, Qt, QThread, QUrl, Signal
+from PySide6.QtCore import QFileInfo, QPointF, QSettings, QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import (QBrush, QColor, QDesktopServices, QGuiApplication, QIcon, QPainter, QPixmap,
                            QRadialGradient)
 from PySide6.QtWidgets import (
-    QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
+    QApplication,     QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QFileIconProvider, QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QDialog, QMainWindow, QMessageBox, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSizePolicy,
+    QDialog, QMainWindow, QMessageBox, QProgressBar, QProgressDialog, QPushButton, QRadioButton, QScrollArea, QSizePolicy,
     QSpinBox, QVBoxLayout, QWidget,
 )
 
 from .. import __app_name__, __author__, __email__, __version__
+from .. import updater
 from ..core import INPUT_EXTS, OUTPUT_FORMATS, Options, combine_to_pdf, convert_file, human_size, kind_of
 from . import style
 
@@ -39,6 +41,14 @@ class Worker(QThread):
         self.files, self.opts = files, opts
 
     def run(self):
+        try:
+            self._run()
+        except Exception as exc:  # never let a bad file take the window down
+            from ..core.convert import JobResult
+            self.result.emit(JobResult(source=self.files[0], error=f"Unexpected problem: {exc}"))
+            self.progress.emit(100, "Stopped")
+
+    def _run(self):
         if self.opts.combine and len(self.files) > 1:
             self.progress.emit(0, "Combining files into one PDF")
             self.result.emit(combine_to_pdf(self.files, self.opts, lambda m: self.progress.emit(-1, m)))
@@ -50,6 +60,36 @@ class Worker(QThread):
             res = convert_file(f, self.opts, lambda m: self.progress.emit(-1, f"{f.name}: {m}"))
             self.result.emit(res)
         self.progress.emit(100, "Done")
+
+
+class UpdateChecker(QThread):
+    found = Signal(object)
+    up_to_date = Signal()
+    failed = Signal(str)
+
+    def run(self):
+        try:
+            rel = updater.check()
+        except Exception as exc:
+            self.failed.emit(str(exc))
+            return
+        self.found.emit(rel) if rel else self.up_to_date.emit()
+
+
+class UpdateDownloader(QThread):
+    progress = Signal(int, int)
+    ready = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, rel):
+        super().__init__()
+        self.rel = rel
+
+    def run(self):
+        try:
+            self.ready.emit(updater.prepare(self.rel, lambda d, t: self.progress.emit(d, t)))
+        except Exception as exc:
+            self.failed.emit(str(exc))
 
 
 # ---------------------------------------------------------------- background
@@ -176,6 +216,13 @@ class MainWindow(QMainWindow):
         outer.addWidget(self._build_right())
         self._refresh()
 
+        self.settings = QSettings("FileFit", "FileFit")
+        self.release = None
+        self.checker: UpdateChecker | None = None
+        updater.cleanup_after_update()
+        if self.settings.value("auto_update_check", True, type=bool):
+            QTimer.singleShot(1500, lambda: self.check_updates(manual=False))
+
     # ---- left: files and results
     def _build_left(self):
         col = QVBoxLayout()
@@ -196,12 +243,33 @@ class MainWindow(QMainWindow):
         titles.addWidget(label(__app_name__, "title"))
         titles.addWidget(label("Make any file fit the upload box.", "subtitle"))
         head.addLayout(titles, 1)
+        upd = QPushButton("⟳  Updates", objectName="ghost")
+        upd.setCursor(Qt.PointingHandCursor)
+        upd.setToolTip("Check for a newer version of FileFit")
+        upd.clicked.connect(lambda: self.check_updates(manual=True))
+        head.addWidget(upd, 0, Qt.AlignVCenter)
         support = QPushButton("♥  Support FileFit", objectName="support")
         support.setCursor(Qt.PointingHandCursor)
         support.clicked.connect(self.show_support)
         head.addWidget(support, 0, Qt.AlignVCenter)
         col.addLayout(head)
         col.addSpacing(4)
+
+        self.banner = QFrame(objectName="banner")
+        b = QHBoxLayout(self.banner)
+        b.setContentsMargins(16, 10, 10, 10)
+        self.banner_text = label("", "bannerText")
+        b.addWidget(self.banner_text, 1)
+        self.banner_btn = QPushButton("Update now", objectName="bannerBtn")
+        self.banner_btn.setCursor(Qt.PointingHandCursor)
+        self.banner_btn.clicked.connect(self.install_update)
+        b.addWidget(self.banner_btn)
+        later = QPushButton("Later", objectName="ghost")
+        later.setCursor(Qt.PointingHandCursor)
+        later.clicked.connect(self.banner.hide)
+        b.addWidget(later)
+        self.banner.hide()
+        col.addWidget(self.banner)
 
         self.drop = DropZone()
         self.drop.files_dropped.connect(self.add_files)
@@ -289,6 +357,11 @@ class MainWindow(QMainWindow):
         self.unit.setCurrentText("MB")
         self.spin_size.valueChanged.connect(lambda _: self._refresh())
         self.unit.currentTextChanged.connect(lambda _: self._refresh())
+        self.spin_size.setAlignment(Qt.AlignCenter)
+        self.unit.setEditable(True)
+        self.unit.lineEdit().setReadOnly(True)
+        self.unit.lineEdit().setAlignment(Qt.AlignCenter)
+        self.unit.lineEdit().installEventFilter(self)  # click anywhere opens the list
         self.spin_size.setFixedWidth(90)
         self.unit.setFixedWidth(72)
         row.addWidget(self.chk_limit)
@@ -318,6 +391,7 @@ class MainWindow(QMainWindow):
         self.spin_h = QSpinBox(minimum=16, maximum=20000, value=1200, suffix=" px")
         for sp in (self.spin_w, self.spin_h):
             sp.setButtonSymbols(QSpinBox.NoButtons)
+            sp.setAlignment(Qt.AlignCenter)
         row.addWidget(QLabel("Max width"))
         row.addWidget(self.spin_w, 1)
         row.addWidget(QLabel("Max height"))
@@ -515,6 +589,102 @@ class MainWindow(QMainWindow):
         if self.last_folder:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.last_folder)))
 
+    # ---- updates
+    def check_updates(self, manual: bool):
+        if self.checker and self.checker.isRunning():
+            return
+        self.checker = UpdateChecker()
+        self.checker.found.connect(lambda rel: self._update_found(rel, manual))
+        if manual:
+            self.checker.up_to_date.connect(self._up_to_date)
+            self.checker.failed.connect(lambda err: self._ask_auto(
+                QMessageBox.Warning, "Could not check for updates",
+                "FileFit could not reach GitHub. Check the internet connection and try again."))
+        self.checker.start()
+
+    def _ask_auto(self, icon, title, text):
+        box = QMessageBox(icon, title, text, QMessageBox.Ok, self)
+        auto = QCheckBox("Check for updates automatically when FileFit starts")
+        auto.setChecked(self.settings.value("auto_update_check", True, type=bool))
+        box.setCheckBox(auto)
+        box.exec()
+        self.settings.setValue("auto_update_check", auto.isChecked())
+
+    def _up_to_date(self):
+        self._ask_auto(QMessageBox.Information, "FileFit is up to date",
+                       f"You have the latest version, FileFit {__version__}.")
+
+    def _update_found(self, rel, manual: bool):
+        self.release = rel
+        kind = updater.install_kind()
+        self.banner_text.setText(f"<b>FileFit {rel.version} is available.</b>  You have {__version__}.")
+        self.banner_btn.setText("Update now" if updater.can_self_install() else "How to update")
+        self.banner.show()
+        if manual:
+            self.install_update()
+
+    def install_update(self):
+        rel = self.release
+        if not rel:
+            return
+        kind = updater.install_kind()
+        if kind == "pip":
+            box = QMessageBox(QMessageBox.Information, "Update FileFit",
+                              f"FileFit {rel.version} is available. Close FileFit, then run this in a terminal:"
+                              "\n\n    pipx upgrade filefit\n\n(If you installed with pip: pip install -U filefit)",
+                              QMessageBox.Ok, self)
+            copy = box.addButton("Copy command", QMessageBox.ActionRole)
+            box.exec()
+            if box.clickedButton() is copy:
+                QGuiApplication.clipboard().setText("pipx upgrade filefit")
+            return
+        if kind == "linux-app":
+            QDesktopServices.openUrl(QUrl(rel.page))
+            return
+        if self.worker and self.worker.isRunning():
+            QMessageBox.information(self, "Update FileFit", "Please wait until the current conversion finishes.")
+            return
+        if QMessageBox.question(self, "Update FileFit",
+                                f"Download and install FileFit {rel.version} now?\n\n"
+                                "FileFit will close for a moment and open again by itself.") != QMessageBox.Yes:
+            return
+        dlg = QProgressDialog("Downloading the update…", "Cancel", 0, 100, self)
+        dlg.setWindowTitle("Updating FileFit")
+        dlg.setWindowModality(Qt.WindowModal)
+        dlg.setMinimumDuration(0)
+        dlg.setAutoClose(False)
+        dlg.setAutoReset(False)
+        dl = UpdateDownloader(rel)
+        self._downloader = dl
+        dl.progress.connect(lambda d, t: (dlg.setMaximum(100), dlg.setValue(int(d * 100 / t)) if t else
+                                          dlg.setMaximum(0)))
+
+        def ready(start_install):
+            if dlg.wasCanceled():
+                return
+            dlg.setLabelText("Installing…")
+            try:
+                start_install()
+            except Exception as exc:
+                dlg.close()
+                self._update_failed(str(exc))
+                return
+            QApplication.instance().quit()
+
+        dl.ready.connect(ready)
+        dl.failed.connect(lambda err: (dlg.close(), self._update_failed(err)))
+        dl.start()
+        dlg.show()
+
+    def _update_failed(self, err: str):
+        box = QMessageBox(QMessageBox.Warning, "Update did not finish",
+                          f"{err}\n\nYou can download the new version from the FileFit website instead.",
+                          QMessageBox.Ok, self)
+        site = box.addButton("Open website", QMessageBox.ActionRole)
+        box.exec()
+        if box.clickedButton() is site:
+            QDesktopServices.openUrl(QUrl(updater.WEBSITE))
+
     def show_support(self):
         dlg = QDialog(self)
         dlg.setWindowTitle("Support FileFit")
@@ -534,7 +704,10 @@ class MainWindow(QMainWindow):
         qr.setStyleSheet("background: white; border-radius: 18px; padding: 10px;")
         qr.setFixedSize(244, 244)
         lay.addWidget(qr, 0, Qt.AlignHCenter)
-        lay.addWidget(label("Scan with GPay, PhonePe, Paytm or any UPI app", "hint"), 0, Qt.AlignHCenter)
+        scan = label("Scan with GPay, PhonePe, Paytm or any UPI app", "subtitle")
+        scan.setAlignment(Qt.AlignCenter)
+        scan.setStyleSheet(f"color: {style.TEXT}; font-size: 10.5pt;")
+        lay.addWidget(scan)
         row = QHBoxLayout()
         upi = label(UPI_ID, "dropTitle")
         upi.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -552,8 +725,18 @@ class MainWindow(QMainWindow):
         close = QPushButton("Close", objectName="primary")
         close.clicked.connect(dlg.accept)
         lay.addWidget(close)
-        dlg.setFixedWidth(420)
+        dlg.setFixedWidth(440)
         dlg.exec()
+
+    def eventFilter(self, obj, ev):
+        from PySide6.QtCore import QEvent
+        try:
+            if ev.type() == QEvent.MouseButtonPress and obj is self.unit.lineEdit() and self.unit.isEnabled():
+                self.unit.showPopup()
+                return True
+        except RuntimeError:  # window is closing
+            return False
+        return super().eventFilter(obj, ev)
 
     def closeEvent(self, e):
         if self.worker and self.worker.isRunning():
@@ -564,9 +747,34 @@ class MainWindow(QMainWindow):
         e.accept()
 
 
-def main():
-    from PySide6.QtWidgets import QApplication
+def log_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") if sys.platform == "win32" else None
+    d = Path(base) / "FileFit" if base else Path.home() / ".local" / "state" / "filefit"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
+
+def install_crash_handler():
+    """Show a friendly message and keep a log instead of vanishing on an unexpected error."""
+    def handler(kind, exc, tb):
+        import traceback
+        text = "".join(traceback.format_exception(kind, exc, tb))
+        log = None
+        try:
+            log = log_dir() / "error.log"
+            with open(log, "a", encoding="utf-8") as fh:
+                fh.write(f"--- FileFit {__version__} ---\n{text}\n")
+        except Exception:
+            pass
+        sys.__stderr__ and sys.__stderr__.write(text)
+        QMessageBox.warning(None, "FileFit hit a problem",
+                            "Something went wrong, but your original files are safe. You can keep working.\n\n"
+                            f"If it happens again, please email {__email__}"
+                            + (f" and attach this file:\n{log}" if log else "."))
+    sys.excepthook = handler
+
+
+def main():
     if sys.platform == "win32":  # own taskbar icon instead of Python's
         try:
             import ctypes
@@ -575,6 +783,14 @@ def main():
             pass
     app = QApplication(sys.argv)
     app.setApplicationName(__app_name__)
+    app.setDesktopFileName("filefit")  # lets Linux docks find FileFit's icon
+    install_crash_handler()
+    if sys.platform.startswith("linux"):
+        try:
+            from ..cli import install_shortcut
+            install_shortcut(quiet=True)  # keep the app menu entry and dock icon in place
+        except Exception:
+            pass
     app.setStyle("Fusion")
     app.setPalette(style.dark_palette())
     app.setStyleSheet(style.STYLESHEET)

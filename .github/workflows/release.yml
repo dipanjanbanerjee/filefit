@@ -27,6 +27,8 @@ jobs:
     needs: test
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      FILEFIT_SELFTEST_NET: "1"   # self-tests must also prove the update check works
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -54,6 +56,15 @@ jobs:
           $version = (python -c "import filefit; print(filefit.__version__)")
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" installer\FileFit.iss
           Move-Item dist\portable\FileFit.exe dist\FileFit-Portable.exe
+      - name: Test the installer (silent install, then self-test the installed app)
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\FileFitInstalled"
+          $p = Start-Process dist\FileFit-Setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$dir" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Error "Installer failed ($($p.ExitCode))"; exit 1 }
+          if (-not (Test-Path "$dir\unins000.exe")) { Write-Error "Uninstaller missing, so in-app updates would not find the install"; exit 1 }
+          $p = Start-Process "$dir\FileFit.exe" -ArgumentList "--selftest" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Error "Installed FileFit.exe --selftest failed ($($p.ExitCode))"; exit 1 }
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -65,6 +76,8 @@ jobs:
     needs: test
     runs-on: ubuntu-22.04   # older base = binary runs on more distros
     timeout-minutes: 30
+    env:
+      FILEFIT_SELFTEST_NET: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

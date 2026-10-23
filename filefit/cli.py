@@ -18,27 +18,35 @@ def parse_size(text: str) -> int:
     return int(float(m.group(1)) * mult)
 
 
-def install_shortcut() -> int:
-    """Add FileFit to the Linux application menu."""
+def install_shortcut(quiet: bool = False) -> int:
+    """Add FileFit to the Linux application menu (also gives docks its icon)."""
     if not sys.platform.startswith("linux"):
-        print("Shortcut install is only needed on Linux. On Windows use the installer.")
+        if not quiet:
+            print("Shortcut install is only needed on Linux. On Windows use the installer.")
         return 1
     import shutil
     icon_src = Path(__file__).parent / "assets" / "icon.png"
     share = Path.home() / ".local" / "share"
     icon_dst = share / "icons" / "hicolor" / "256x256" / "apps" / "filefit.png"
+    if getattr(sys, "frozen", False):  # standalone Linux app
+        exe = sys.executable
+    else:
+        exe = shutil.which("filefit") or "filefit"
+    desktop = share / "applications" / "filefit.desktop"
+    text = ("[Desktop Entry]\nType=Application\nName=FileFit\n"
+            "Comment=Convert and compress files for upload portals\n"
+            f"Exec=\"{exe}\" %F\nIcon=filefit\nTerminal=false\nStartupWMClass=filefit\n"
+            "Categories=Utility;Office;Graphics;\n"
+            "MimeType=image/jpeg;image/png;image/webp;application/pdf;"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document;\n")
+    if quiet and desktop.exists() and desktop.read_text() == text and icon_dst.exists():
+        return 0
     icon_dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(icon_src, icon_dst)
-    exe = shutil.which("filefit") or "filefit"
-    desktop = share / "applications" / "filefit.desktop"
     desktop.parent.mkdir(parents=True, exist_ok=True)
-    desktop.write_text(
-        "[Desktop Entry]\nType=Application\nName=FileFit\n"
-        "Comment=Convert and compress files for upload portals\n"
-        f"Exec={exe} %F\nIcon=filefit\nTerminal=false\nCategories=Utility;Office;Graphics;\n"
-        "MimeType=image/jpeg;image/png;image/webp;application/pdf;"
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document;\n")
-    print(f"Added FileFit to your app menu ({desktop})")
+    desktop.write_text(text)
+    if not quiet:
+        print(f"Added FileFit to your app menu ({desktop})")
     return 0
 
 
