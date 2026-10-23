@@ -99,12 +99,30 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
           FLET_CLI_NO_RICH_OUTPUT: "1"
+          # Permanent signing key (Settings > Secrets and variables > Actions).
+          # Every version must be signed with the same key, or phones refuse the update.
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           cp -r ../filefit ./filefit
           rm -rf filefit/gui filefit/__pycache__
           pip install "flet[all]==1.0.5"
           VERSION=$(python -c "import filefit; print(filefit.__version__)")
-          flet build apk --yes -v --arch arm64-v8a --build-version "$VERSION" --build-number "${{ github.run_number }}"
+          SIGN=()
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            SIGN=(--android-signing-key-store "$RUNNER_TEMP/release.jks"
+                  --android-signing-key-store-password "$KEYSTORE_PASSWORD"
+                  --android-signing-key-password "$KEYSTORE_PASSWORD"
+                  --android-signing-key-alias filefit)
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing; refusing to release a debug-signed APK"; exit 1
+          else
+            echo "::warning::No signing key secret; building a debug-signed test APK"
+          fi
+          flet build apk --yes -v --arch arm64-v8a --build-version "$VERSION" --build-number "${{ github.run_number }}" "${SIGN[@]}"
+          # Show which key signed it
+          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs build/apk/*.apk | grep -i 'SHA-256' | head -1 || true
           ls -la build/apk
           du -h build/apk/*.apk
           mkdir -p ../dist && cp "$(ls build/apk/*.apk | head -1)" ../dist/FileFit-Android.apk
