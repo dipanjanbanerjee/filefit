@@ -31,9 +31,19 @@ jobs:
       - run: pip install ".[dev]"
       - name: Build app folder (for the installer)
         run: pyinstaller --noconfirm --clean FileFit.spec
+      - name: Self-test the app folder
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\FileFit\FileFit.exe -ArgumentList "--selftest" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Error "FileFit.exe --selftest failed ($($p.ExitCode))"; exit 1 }
       - name: Build portable single exe
         shell: bash
         run: FILEFIT_ONEFILE=1 pyinstaller --noconfirm FileFit.spec --distpath dist/portable --workpath build/portable
+      - name: Self-test the portable exe
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\portable\FileFit.exe -ArgumentList "--selftest" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Error "Portable --selftest failed ($($p.ExitCode))"; exit 1 }
       - name: Build installer
         shell: pwsh
         run: |
@@ -61,6 +71,7 @@ jobs:
       - name: Standalone Linux app
         run: |
           pyinstaller --noconfirm --clean FileFit.spec
+          QT_QPA_PLATFORM=offscreen dist/FileFit/FileFit --selftest
           tar -C dist -czf dist/FileFit-linux-x86_64.tar.gz FileFit
       - uses: actions/upload-artifact@v4
         with:
