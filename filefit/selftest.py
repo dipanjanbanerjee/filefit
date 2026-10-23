@@ -12,7 +12,15 @@ from pathlib import Path
 def run() -> int:
     try:
         from PIL import Image
-        from PySide6 import QtWidgets  # noqa: F401  (Qt libraries are bundled)
+        try:
+            from PySide6 import QtWidgets  # noqa: F401  (Qt libraries are bundled)
+        except ImportError as exc:
+            # Graphics drivers such as libEGL come from the Linux system, not the app.
+            # Build servers without a desktop lack them; real desktops have them.
+            if sys.platform.startswith("linux") and ".so" in str(exc):
+                print(f"note: skipped Qt check, system graphics library missing ({exc})")
+            else:
+                raise
 
         from .core import Options, convert_file
 
