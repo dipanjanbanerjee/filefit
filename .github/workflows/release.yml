@@ -33,7 +33,7 @@ jobs:
         run: pyinstaller --noconfirm --clean FileFit.spec
       - name: Build portable single exe
         shell: bash
-        run: FILEFIT_ONEFILE=1 pyinstaller --noconfirm FileFit.spec --distpath dist/portable
+        run: FILEFIT_ONEFILE=1 pyinstaller --noconfirm FileFit.spec --distpath dist/portable --workpath build/portable
       - name: Build installer
         shell: pwsh
         run: |
@@ -101,3 +101,5 @@ jobs:
         with: { name: linux, path: out }
       - run: mkdir dist && mv out/*.whl out/filefit-*.tar.gz dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
