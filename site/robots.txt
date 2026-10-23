@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://dipanjanbanerjee.github.io/filefit/sitemap.xml
