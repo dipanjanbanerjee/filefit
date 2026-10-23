@@ -15,7 +15,7 @@
 <meta property="og:image" content="https://dipanjanbanerjee.github.io/filefit/screenshot.png">
 <meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"FileFit","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows, Linux, Android","url":"https://dipanjanbanerjee.github.io/filefit/","downloadUrl":"https://github.com/dipanjanbanerjee/filefit/releases/latest","softwareVersion":"1.1.0","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Dipanjan Banerjee","email":"dipanjanbanerjee20@gmail.com"},"description":"Converts JPG, PNG, PDF and DOCX files and compresses them under an upload size limit, fully offline."}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"FileFit","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows, Linux, Android","url":"https://dipanjanbanerjee.github.io/filefit/","downloadUrl":"https://github.com/dipanjanbanerjee/filefit/releases/latest","softwareVersion":"1.2.0","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Dipanjan Banerjee","email":"dipanjanbanerjee20@gmail.com"},"description":"Converts JPG, PNG, PDF and DOCX files and compresses them under an upload size limit, fully offline."}
 </script>
 <link rel="icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -139,6 +139,14 @@ nav a:hover { color: var(--ink); }
 .after .size { color: var(--fit); }
 .legend { font-size: 0.82rem; color: var(--muted); margin: 0; }
 
+.support .wrap { padding-block: 24px 72px; }
+.support-card { display: flex; gap: 28px; align-items: center; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 22px; padding: 28px; }
+.support-card h2 { font: 800 1.7rem/1.15 var(--display); margin: 0 0 10px; }
+.support-card p { color: var(--muted); margin: 0 0 16px; }
+.support-card img { width: 168px; height: 168px; border-radius: 16px; background: #fff; padding: 8px; flex: none; }
+.upi { font: 500 1rem var(--mono, monospace); color: var(--ink); }
+@media (max-width: 640px) { .support-card { flex-direction: column; text-align: center; } }
 .features .wrap { padding-block: 64px 24px; }
 .features h2, .shot h2 { font: 800 2rem/1.1 var(--display); margin: 0 0 28px; letter-spacing: -0.01em; }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px 36px; }
@@ -263,9 +271,23 @@ footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; g
     <div class="wrap">
       <h2>See it in action</h2>
       <figure>
-        <img src="screenshot.png" alt="FileFit window with three files converted to JPG under 200 KB" width="1120" height="760">
-        <figcaption>Three 7.6 MB files converted to JPG under a 200 KB limit.</figcaption>
+        <img src="screenshot.png" alt="FileFit window with two files converted to JPG under 200 KB" width="1120" height="760">
+        <figcaption>Two 7.6 MB files converted to JPG under a 200 KB limit.</figcaption>
       </figure>
+    </div>
+  </section>
+
+  <section class="support" id="support">
+    <div class="wrap">
+      <div class="support-card">
+        <img src="upi_qr.png" alt="UPI QR code to support FileFit" width="168" height="168">
+        <div>
+          <h2>Free, no ads, no tracking. Keep it that way.</h2>
+          <p>If FileFit got your form accepted, a small tip through UPI helps a lot. Scan the code with GPay, PhonePe, Paytm or any UPI app.</p>
+          <p class="upi">UPI ID: dipanjanbanerjee@pnb</p>
+          <a class="btn primary" href="upi://pay?pa=dipanjanbanerjee@pnb&amp;pn=Dipanjan%20Banerjee&amp;cu=INR&amp;tn=Support%20FileFit">Pay with a UPI app (on your phone)</a>
+        </div>
+      </div>
     </div>
   </section>
 </main>

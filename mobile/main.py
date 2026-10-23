@@ -233,7 +233,11 @@ class FileFitApp:
                     txt("Make any file fit the upload box", size=13, color=MUTED),
                 ]),
             ]),
-            ft.IconButton(icon=ft.Icons.INFO_OUTLINE_ROUNDED, icon_color=MUTED, on_click=self.show_about),
+            ft.Row(spacing=0, controls=[
+                ft.IconButton(icon=ft.Icons.FAVORITE_ROUNDED, icon_color=PINK, tooltip="Support FileFit",
+                              on_click=self.show_support),
+                ft.IconButton(icon=ft.Icons.INFO_OUTLINE_ROUNDED, icon_color=MUTED, on_click=self.show_about),
+            ]),
         ])
 
         picker_card = ft.Container(
@@ -551,6 +555,45 @@ class FileFitApp:
         self.page.show_dialog(ft.SnackBar(content=txt(message, color=INK, weight=ft.FontWeight.W_600),
                                           bgcolor=color, behavior=ft.SnackBarBehavior.FLOATING))
 
+    def show_support(self, e=None):
+        async def pay(e):
+            try:
+                ok = await self.urls.launch_url(UPI_URI)
+            except Exception:
+                ok = False
+            if ok is False:
+                self.toast("No UPI app found. Scan the QR code instead.", WARN)
+
+        async def copy(e):
+            try:
+                await ft.Clipboard().set(UPI_ID)
+            except Exception:
+                pass
+            self.toast("UPI ID copied", OK)
+
+        self.page.show_dialog(ft.AlertDialog(
+            bgcolor=SURFACE,
+            title=txt("Enjoying FileFit?", size=20, weight=ft.FontWeight.W_700, font=DISPLAY),
+            content=ft.Column(tight=True, spacing=14, horizontal_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                txt("FileFit is free, has no ads and never tracks you. If it saved your form, a small UPI tip "
+                    "helps keep it that way.", color=MUTED, size=14),
+                ft.Container(bgcolor="white", border_radius=18, padding=10,
+                             content=ft.Image(src="upi_qr.png", width=190, height=190)),
+                txt(UPI_ID, size=15, weight=ft.FontWeight.W_600, selectable=True),
+                ft.Container(
+                    height=50, border_radius=16, gradient=GRAD, ink=True, on_click=pay, alignment=ft.Alignment(0, 0),
+                    content=ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=8, controls=[
+                        ft.Icon(ft.Icons.CURRENCY_RUPEE_ROUNDED, color="white", size=20),
+                        txt("Pay with any UPI app", size=15, weight=ft.FontWeight.W_700, font=DISPLAY, color="white"),
+                    ]),
+                ),
+            ]),
+            actions=[
+                ft.TextButton(content=txt("Copy UPI ID", color=TEAL), on_click=copy),
+                ft.TextButton(content=txt("Close", color=MUTED), on_click=lambda e: self.page.pop_dialog()),
+            ],
+        ))
+
     def show_about(self, e):
         async def open_site(e):
             await self.urls.launch_url("https://dipanjanbanerjee.github.io/filefit/")
@@ -574,11 +617,17 @@ class FileFitApp:
                 txt(__email__, size=14, color=TEAL, selectable=True),
             ]),
             actions=[
+                ft.TextButton(content=txt("Support", color=PINK), on_click=lambda e: (self.page.pop_dialog(),
+                                                                                    self.show_support())),
                 ft.TextButton(content=txt("Welcome tour", color=MUTED), on_click=replay),
                 ft.TextButton(content=txt("Email", color=TEAL), on_click=email),
                 ft.TextButton(content=txt("Website", color=TEAL), on_click=open_site),
             ],
         ))
+
+
+UPI_ID = "dipanjanbanerjee@pnb"
+UPI_URI = f"upi://pay?pa={UPI_ID}&pn=Dipanjan%20Banerjee&cu=INR&tn=Support%20FileFit"
 
 
 def friendly_error(msg: str | None) -> str:
@@ -604,6 +653,9 @@ async def main(page: ft.Page):
     if demo:
         app.files = [Path(x) for x in demo.split(os.pathsep) if Path(x).exists()]
     await app.start()
+    if os.environ.get("FILEFIT_DEMO_SUPPORT"):
+        app.show_home()
+        app.show_support()
     if os.environ.get("FILEFIT_DEMO_FORMAT"):  # test hook: convert the demo files straight away
         app.fmt = os.environ["FILEFIT_DEMO_FORMAT"]
         app.limit = int(os.environ.get("FILEFIT_DEMO_LIMIT", "0")) or None

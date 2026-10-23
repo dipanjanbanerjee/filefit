@@ -3,13 +3,14 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QFileInfo, QSize, Qt, QThread, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QIcon
+from PySide6.QtCore import QFileInfo, QPointF, QSize, Qt, QThread, QUrl, Signal
+from PySide6.QtGui import (QBrush, QColor, QDesktopServices, QGuiApplication, QIcon, QPainter, QPixmap,
+                           QRadialGradient)
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QFileIconProvider, QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QMainWindow, QMessageBox, QProgressBar, QPushButton, QRadioButton, QSpinBox, QVBoxLayout,
-    QWidget,
+    QDialog, QMainWindow, QMessageBox, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSizePolicy,
+    QSpinBox, QVBoxLayout, QWidget,
 )
 
 from .. import __app_name__, __author__, __email__, __version__
@@ -18,6 +19,8 @@ from . import style
 
 PRESETS = [("100 KB", 100, "KB"), ("200 KB", 200, "KB"), ("500 KB", 500, "KB"),
            ("1 MB", 1, "MB"), ("2 MB", 2, "MB"), ("5 MB", 5, "MB")]
+UPI_ID = "dipanjanbanerjee@pnb"
+UPI_URI = f"upi://pay?pa={UPI_ID}&pn=Dipanjan%20Banerjee&cu=INR&tn=Support%20FileFit"
 FILE_FILTER = "Supported files ({});;All files (*)".format(" ".join(f"*{e}" for e in sorted(INPUT_EXTS)))
 
 
@@ -49,6 +52,34 @@ class Worker(QThread):
         self.progress.emit(100, "Done")
 
 
+# ---------------------------------------------------------------- background
+
+class Backdrop(QWidget):
+    """Deep ink background with soft colour glows and a faint dot grid."""
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        p.fillRect(self.rect(), QColor(style.INK))
+        for x, y, r, color, alpha in [(0.08, 0.0, 0.55, style.VIOLET, 110), (1.0, 1.0, 0.6, style.TEAL, 70),
+                                      (0.62, 0.12, 0.35, style.PINK, 38)]:
+            g = QRadialGradient(QPointF(x * w, y * h), r * max(w, h))
+            c = QColor(color)
+            c.setAlpha(alpha)
+            g.setColorAt(0, c)
+            c.setAlpha(0)
+            g.setColorAt(1, c)
+            p.fillRect(self.rect(), QBrush(g))
+        dot = QColor("#FFFFFF")
+        dot.setAlpha(14)
+        p.setPen(Qt.NoPen)
+        p.setBrush(dot)
+        for gx in range(12, w, 26):
+            for gy in range(12, h, 26):
+                p.drawEllipse(QPointF(gx, gy), 1.1, 1.1)
+
+
 # ---------------------------------------------------------------- drop zone
 
 class DropZone(QFrame):
@@ -62,15 +93,18 @@ class DropZone(QFrame):
         self.setMinimumHeight(150)
         lay = QVBoxLayout(self)
         lay.setAlignment(Qt.AlignCenter)
-        icon = QLabel("⇪")
+        lay.setSpacing(6)
+        icon = QLabel("+")
         icon.setObjectName("dropIcon")
+        icon.setFixedSize(58, 58)
         title = QLabel("Drop files here")
         title.setObjectName("dropTitle")
         hint = QLabel("or click to browse  ·  JPG, JPEG, PNG, WEBP, HEIC, PDF, DOCX")
         hint.setObjectName("hint")
+        hint.setWordWrap(True)
         for w in (icon, title, hint):
             w.setAlignment(Qt.AlignCenter)
-            lay.addWidget(w)
+            lay.addWidget(w, 0, Qt.AlignHCenter)
 
     def _set_hover(self, on: bool):
         self.setProperty("hover", "true" if on else "false")
@@ -133,7 +167,7 @@ class MainWindow(QMainWindow):
         self.out_dir: Path | None = None
         self.last_folder: Path | None = None
 
-        root = QWidget(objectName="root")
+        root = Backdrop(objectName="root")
         self.setCentralWidget(root)
         outer = QHBoxLayout(root)
         outer.setContentsMargins(24, 22, 24, 22)
@@ -146,15 +180,35 @@ class MainWindow(QMainWindow):
     def _build_left(self):
         col = QVBoxLayout()
         col.setSpacing(12)
-        col.addWidget(label(__app_name__, "title"))
-        col.addWidget(label("Convert and shrink documents so any upload portal accepts them.", "subtitle"))
+        head = QHBoxLayout()
+        head.setSpacing(14)
+        badge = QLabel()
+        badge.setFixedSize(52, 52)
+        if asset("icon.png").exists():
+            dpr = self.devicePixelRatioF() or 1
+            pm = QPixmap(str(asset("icon.png"))).scaled(int(52 * dpr), int(52 * dpr), Qt.KeepAspectRatio,
+                                                         Qt.SmoothTransformation)
+            pm.setDevicePixelRatio(dpr)
+            badge.setPixmap(pm)
+        head.addWidget(badge)
+        titles = QVBoxLayout()
+        titles.setSpacing(0)
+        titles.addWidget(label(__app_name__, "title"))
+        titles.addWidget(label("Make any file fit the upload box.", "subtitle"))
+        head.addLayout(titles, 1)
+        support = QPushButton("♥  Support FileFit", objectName="support")
+        support.setCursor(Qt.PointingHandCursor)
+        support.clicked.connect(self.show_support)
+        head.addWidget(support, 0, Qt.AlignVCenter)
+        col.addLayout(head)
+        col.addSpacing(4)
 
         self.drop = DropZone()
         self.drop.files_dropped.connect(self.add_files)
         col.addWidget(self.drop)
 
         head = QHBoxLayout()
-        self.files_label = label("Files", "section")
+        self.files_label = label("FILES", "section")
         head.addWidget(self.files_label)
         head.addStretch()
         self.btn_remove = QPushButton("Remove")
@@ -173,7 +227,7 @@ class MainWindow(QMainWindow):
         col.addWidget(self.file_list, 3)
 
         rhead = QHBoxLayout()
-        rhead.addWidget(label("Results", "section"))
+        rhead.addWidget(label("RESULTS", "section"))
         rhead.addStretch()
         self.btn_open = QPushButton("Open output folder")
         self.btn_open.clicked.connect(self.open_output_folder)
@@ -193,10 +247,20 @@ class MainWindow(QMainWindow):
 
     # ---- right: settings
     def _build_right(self):
-        frame, lay = card()
-        frame.setFixedWidth(390)
+        frame, outer = card()
+        frame.setFixedWidth(400)
+        outer.setContentsMargins(6, 8, 6, 18)
+        inner = QWidget()
+        lay = QVBoxLayout(inner)
+        lay.setContentsMargins(14, 10, 14, 6)
+        lay.setSpacing(10)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(inner)
+        outer.addWidget(scroll, 1)
 
-        lay.addWidget(label("Convert to", "section"))
+        lay.addWidget(label("CONVERT TO", "section"))
         grid = QGridLayout()
         grid.setSpacing(8)
         self.format_group = QButtonGroup(self)
@@ -213,15 +277,18 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.format_hint)
 
         lay.addSpacing(4)
-        lay.addWidget(label("File size limit", "section"))
+        lay.addWidget(label("FILE SIZE LIMIT", "section"))
         self.chk_limit = QCheckBox("Keep each file under")
         self.chk_limit.toggled.connect(self._refresh)
         row = QHBoxLayout()
         self.spin_size = QDoubleSpinBox(decimals=1, minimum=0.1, maximum=99999, value=2.0)
         self.spin_size.setButtonSymbols(QDoubleSpinBox.NoButtons)
+        self.chip_group = None
         self.unit = QComboBox()
         self.unit.addItems(["KB", "MB"])
         self.unit.setCurrentText("MB")
+        self.spin_size.valueChanged.connect(lambda _: self._refresh())
+        self.unit.currentTextChanged.connect(lambda _: self._refresh())
         self.spin_size.setFixedWidth(90)
         self.unit.setFixedWidth(72)
         row.addWidget(self.chk_limit)
@@ -231,15 +298,18 @@ class MainWindow(QMainWindow):
         lay.addLayout(row)
         chips = QGridLayout()
         chips.setSpacing(6)
+        self.chip_group = QButtonGroup(self)
+        self.chip_group.setExclusive(False)  # checked state just mirrors the size box
         for i, (text, val, unit) in enumerate(PRESETS):
-            c = QPushButton(text, objectName="chip")
+            c = QPushButton(text, objectName="chip", checkable=True)
             c.setCursor(Qt.PointingHandCursor)
+            self.chip_group.addButton(c)
             c.clicked.connect(lambda _=False, v=val, u=unit: self._preset(v, u))
             chips.addWidget(c, i // 3, i % 3)
         lay.addLayout(chips)
 
         lay.addSpacing(4)
-        lay.addWidget(label("Resize pictures", "section"))
+        lay.addWidget(label("RESIZE PICTURES", "section"))
         self.chk_resize = QCheckBox("Limit width and height (keeps proportions)")
         self.chk_resize.toggled.connect(self._refresh)
         lay.addWidget(self.chk_resize)
@@ -255,12 +325,12 @@ class MainWindow(QMainWindow):
         lay.addLayout(row)
 
         lay.addSpacing(4)
-        lay.addWidget(label("Options", "section"))
+        lay.addWidget(label("OPTIONS", "section"))
         self.chk_combine = QCheckBox("Combine all files into one PDF")
         self.chk_combine.setToolTip("Drag files in the list to change their order")
         lay.addWidget(self.chk_combine)
 
-        lay.addWidget(label("Save to", "section"))
+        lay.addWidget(label("SAVE TO", "section"))
         self.rad_same = QRadioButton("Same folder as the original", checked=True)
         self.rad_choose = QRadioButton("Choose a folder…")
         self.rad_choose.clicked.connect(self.choose_folder)
@@ -271,15 +341,21 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.folder_label)
 
         lay.addStretch()
+
+        foot = QVBoxLayout()
+        foot.setContentsMargins(14, 6, 14, 0)
+        foot.setSpacing(10)
         self.status = label("Add some files to get started.", "muted")
-        lay.addWidget(self.status)
+        foot.addWidget(self.status)
         self.progress = QProgressBar(maximum=100, value=0)
         self.progress.setTextVisible(False)
-        lay.addWidget(self.progress)
-        self.btn_go = QPushButton("Convert", objectName="primary")
+        self.progress.setVisible(False)  # only while working
+        foot.addWidget(self.progress)
+        self.btn_go = QPushButton("✦  Make it fit", objectName="primary")
         self.btn_go.setCursor(Qt.PointingHandCursor)
         self.btn_go.clicked.connect(self.start)
-        lay.addWidget(self.btn_go)
+        foot.addWidget(self.btn_go)
+        outer.addLayout(foot)
         return frame
 
     # ---- state
@@ -293,8 +369,11 @@ class MainWindow(QMainWindow):
         busy = self.worker is not None and self.worker.isRunning()
         n = self.file_list.count()
         fmt = self.out_format()
-        self.files_label.setText(f"Files ({n})" if n else "Files")
+        self.files_label.setText(f"FILES ({n})" if n else "FILES")
         self.spin_size.setEnabled(self.chk_limit.isChecked())
+        cur = (self.spin_size.value(), self.unit.currentText())
+        for b, (_t, v, u) in zip(self.chip_group.buttons() if self.chip_group else [], PRESETS):
+            b.setChecked(self.chk_limit.isChecked() and cur == (v, u))
         self.unit.setEnabled(self.chk_limit.isChecked())
         self.spin_w.setEnabled(self.chk_resize.isChecked())
         self.spin_h.setEnabled(self.chk_resize.isChecked())
@@ -321,6 +400,7 @@ class MainWindow(QMainWindow):
         self.chk_limit.setChecked(True)
         self.unit.setCurrentText(unit)
         self.spin_size.setValue(val)
+        self._refresh()
 
     def add_files(self, paths: list[Path]):
         existing = set(map(str, self.files()))
@@ -342,7 +422,7 @@ class MainWindow(QMainWindow):
         if skipped:
             self.status.setText("Skipped unsupported: " + ", ".join(skipped[:4]) + ("…" if len(skipped) > 4 else ""))
         elif paths:
-            self.status.setText("Ready. Pick a format and press Convert.")
+            self.status.setText("Ready. Pick a format and press Make it fit.")
         self._refresh()
 
     def remove_selected(self):
@@ -389,6 +469,7 @@ class MainWindow(QMainWindow):
         self.worker.result.connect(self._on_result)
         self.worker.finished.connect(self._on_finished)
         self.btn_go.setText("Working…")
+        self.progress.setVisible(True)
         self.worker.start()
         self._refresh()
 
@@ -418,7 +499,8 @@ class MainWindow(QMainWindow):
             self.last_folder = out.path.parent
 
     def _on_finished(self):
-        self.btn_go.setText("Convert")
+        self.btn_go.setText("✦  Make it fit")
+        self.progress.setVisible(False)
         made = sum(1 for i in range(self.results.count()) if self.results.item(i).data(Qt.UserRole))
         self.status.setText(f"Finished. {made} file{'s' if made != 1 else ''} created.")
         self.worker = None
@@ -432,6 +514,46 @@ class MainWindow(QMainWindow):
     def open_output_folder(self):
         if self.last_folder:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.last_folder)))
+
+    def show_support(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Support FileFit")
+        dlg.setStyleSheet(f"QDialog {{ background: {style.SURFACE}; }}")
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(28, 24, 28, 24)
+        lay.setSpacing(10)
+        head = label("Enjoying FileFit? ♥", "title")
+        head.setStyleSheet("font-size: 17pt;")
+        lay.addWidget(head)
+        lay.addWidget(label("FileFit is free, has no ads and never tracks you. If it saved your form, a small "
+                            "UPI tip helps keep it that way.", "subtitle"))
+        qr = QLabel(alignment=Qt.AlignCenter)
+        if asset("upi_qr.png").exists():
+            qr.setPixmap(QPixmap(str(asset("upi_qr.png"))).scaled(220, 220, Qt.KeepAspectRatio,
+                                                                    Qt.SmoothTransformation))
+        qr.setStyleSheet("background: white; border-radius: 18px; padding: 10px;")
+        qr.setFixedSize(244, 244)
+        lay.addWidget(qr, 0, Qt.AlignHCenter)
+        lay.addWidget(label("Scan with GPay, PhonePe, Paytm or any UPI app", "hint"), 0, Qt.AlignHCenter)
+        row = QHBoxLayout()
+        upi = label(UPI_ID, "dropTitle")
+        upi.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        row.addWidget(upi, 1)
+        copy = QPushButton("Copy UPI ID")
+        copy.setCursor(Qt.PointingHandCursor)
+
+        def do_copy():
+            QGuiApplication.clipboard().setText(UPI_ID)
+            copy.setText("Copied ✓")
+
+        copy.clicked.connect(do_copy)
+        row.addWidget(copy)
+        lay.addLayout(row)
+        close = QPushButton("Close", objectName="primary")
+        close.clicked.connect(dlg.accept)
+        lay.addWidget(close)
+        dlg.setFixedWidth(420)
+        dlg.exec()
 
     def closeEvent(self, e):
         if self.worker and self.worker.isRunning():
@@ -454,6 +576,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(__app_name__)
     app.setStyle("Fusion")
+    app.setPalette(style.dark_palette())
     app.setStyleSheet(style.STYLESHEET)
     win = MainWindow()
     files = [Path(a) for a in sys.argv[1:] if Path(a).is_file()]
