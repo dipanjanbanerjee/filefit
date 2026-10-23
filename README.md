@@ -13,6 +13,7 @@ Extra options: size limit with one-click presets (100 KB to 5 MB), maximum width
 ## Install
 
 - **Windows:** download `FileFit-Setup.exe` from the Releases page or the website and run it.
+- **Android:** download `FileFit-Android.apk` from the Releases page or the website, tap it and choose Install (Google Play later).
 - **Linux:** `pipx install filefit`, then `filefit-cli --install-shortcut` to add it to your app menu.
 - **Command line (any OS):** `filefit-cli photo.jpg --to pdf --max-size 2MB`
 
@@ -47,6 +48,9 @@ build_windows.bat           local one-click Windows build
 
 Run the tests: `pip install -r requirements-dev.txt` then `pytest -q tests`.
 
-## Linux and Android later
-- **Linux**: the same code runs as is (`python main.py`), and `pyinstaller FileFit.spec` on Linux makes a Linux binary.
-- **Android / Play Store**: the engine in `filefit/core` is plain Python with no desktop code, so it can be reused. The planned route is a new touch-friendly screen built with **Flet** (Python + Flutter), which packages Python apps as Android APK/AAB files for the Play Store; the desktop Qt window does not carry over to phones.
+## Android app
+`mobile/` holds the phone app: a Flet (Python + Flutter) screen on top of the same `filefit/core` engine, with a welcome tour, format and size-limit chips, and Share / Save buttons for the results. GitHub Actions builds `FileFit-Android.apk` with `flet build apk`.
+
+Try it on a computer: `pip install "flet[all]==1.0.5"`, then `python mobile/main.py`. Turning DOCX into PDF or pictures is not available on the phone (it needs Word or LibreOffice).
+
+Fonts: Outfit and DM Sans, SIL Open Font License (see `mobile/assets/fonts/`).
