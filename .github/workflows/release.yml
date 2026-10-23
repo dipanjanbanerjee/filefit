@@ -13,17 +13,21 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: sudo apt-get update && sudo apt-get install -y libreoffice-writer-nogui libegl1
+      - name: Install LibreOffice (for DOCX tests)
+        timeout-minutes: 10
+        run: sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libreoffice-writer-nogui libegl1
       - run: pip install -e ".[dev]"
       - run: pytest -q tests
 
   windows:
     needs: test
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -61,6 +65,7 @@ jobs:
   linux:
     needs: test
     runs-on: ubuntu-22.04   # older base = binary runs on more distros
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
