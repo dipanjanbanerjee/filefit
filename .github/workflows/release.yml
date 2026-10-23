@@ -121,8 +121,13 @@ jobs:
             echo "::warning::No signing key secret; building a debug-signed test APK"
           fi
           flet build apk --yes -v --arch arm64-v8a --build-version "$VERSION" --build-number "${{ github.run_number }}" "${SIGN[@]}"
-          # Show which key signed it
-          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs build/apk/*.apk | grep -i 'SHA-256' | head -1 || true
+          # Prove which key signed it (the permanent FileFit key on every release)
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          CERT=$("$APKSIGNER" verify --print-certs build/apk/*.apk | grep -i 'certificate SHA-256' | head -1 | awk '{print $NF}')
+          echo "Signed with certificate SHA-256: $CERT"
+          if [ -n "$KEYSTORE_B64" ] && [ "$CERT" != "6a81c5267746e038711a26303a67cda76d807258fbf87b9208791321510388c5" ]; then
+            echo "::error::APK is not signed with the FileFit release key"; exit 1
+          fi
           ls -la build/apk
           du -h build/apk/*.apk
           mkdir -p ../dist && cp "$(ls build/apk/*.apk | head -1)" ../dist/FileFit-Android.apk
